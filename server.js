@@ -13,7 +13,7 @@ app.use(express.json());
 
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/user", require("./routes/userRoutes"));
-app.use("/api/transactions", require("./routes/Tem"));
+app.use("/api/transactions", require("./routes/transactionRoutes"));
 
 app.get("/", (req, res) => {
   res.send("SecureBank API Running");
