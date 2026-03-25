@@ -5,36 +5,29 @@ const User = require("../models/User");
 
 const router = express.Router();
 
-function generateAccountNumber() {
-  return Math.floor(1000000000 + Math.random() * 9000000000).toString();
-}
-
 /*
 REGISTER USER
 */
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, transactionPin } = req.body;
 
-    // Check if user already exists
+    // 🔍 Basic validation
+    if (!name || !email || !password || !transactionPin) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
     const existingUser = await User.findOne({ email });
-
     if (existingUser) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Generate account number
-    const accountNumber = generateAccountNumber();
-
+    // ✅ NO HASHING HERE (schema handles it)
     const user = new User({
       name,
       email,
-      password: hashedPassword,
-      accountNumber
+      password,
+      transactionPin
     });
 
     await user.save();
@@ -56,13 +49,21 @@ LOGIN USER
 */
 router.post("/login", async (req, res) => {
   try {
-
     const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password required" });
+    }
 
     const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    // 🚫 BLOCK SUSPENDED USERS
+    if (user.status === "suspended") {
+      return res.status(403).json({ message: "Account suspended" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -72,8 +73,8 @@ router.post("/login", async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET || "securebanksecret",
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
@@ -86,15 +87,15 @@ router.post("/login", async (req, res) => {
         email: user.email,
         accountNumber: user.accountNumber,
         routingNumber: user.routingNumber,
-        balance: user.balance
+        balance: user.balance,
+        role: user.role,
+        status: user.status
       }
     });
 
   } catch (error) {
-
     console.error(error);
     res.status(500).json({ message: "Server error" });
-
   }
 });
 
