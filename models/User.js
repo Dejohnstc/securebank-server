@@ -91,6 +91,5 @@ userSchema.pre("save", function (next) {
 
 
 // ⚡ INDEX FOR FAST SEARCH
-userSchema.index({ email: 1 });
 
 module.exports = mongoose.model("User", userSchema);
