@@ -10,16 +10,16 @@ const app = express();
 // ✅ Connect DB
 connectDB();
 
-// ✅ CORS CONFIG (FIXED)
+// ✅ CORS CONFIG (FIXED & CLEAN)
 const allowedOrigins = [
   "http://localhost:5173",
   "https://securebank-client.vercel.app",
   "https://securebank.obiresoffice.com"
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
-    // allow tools like Postman
+    // Allow Postman / mobile apps
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
@@ -30,10 +30,13 @@ app.use(cors({
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true
-}));
+};
 
-// ✅ HANDLE PREFLIGHT (VERY IMPORTANT)
-app.options("*", cors());
+// ✅ APPLY CORS
+app.use(cors(corsOptions));
+
+// ✅ HANDLE PREFLIGHT (FIXED)
+app.options("*", cors(corsOptions));
 
 // ✅ BODY PARSER
 app.use(express.json());
