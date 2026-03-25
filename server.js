@@ -8,9 +8,22 @@ const adminRoutes = require('./routes/admin');
 const app = express();
 
 connectDB();
+const cors = require("cors");
 
 app.use(cors({
-  origin: "https://securebank-client.vercel.app",
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      "http://localhost:5173",
+      "https://securebank-client.vercel.app",
+      "https://securebank.obiresoffice.com"
+    ];
+
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
