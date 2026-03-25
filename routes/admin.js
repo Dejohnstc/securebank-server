@@ -11,6 +11,7 @@ router.get('/users', adminMiddleware, async (req, res) => {
     const users = await User.find().select('-password -transactionPin');
     res.json(users);
   } catch (err) {
+    console.error("GET USERS ERROR:", err);
     res.status(500).json({ message: "Error fetching users" });
   }
 });
@@ -30,6 +31,7 @@ router.get('/users/search', adminMiddleware, async (req, res) => {
 
     res.json(users);
   } catch (err) {
+    console.error("SEARCH ERROR:", err);
     res.status(500).json({ message: "Search error" });
   }
 });
@@ -46,6 +48,7 @@ router.delete('/users/:id', adminMiddleware, async (req, res) => {
 
     res.json({ message: "User deleted" });
   } catch (err) {
+    console.error("DELETE ERROR:", err);
     res.status(500).json({ message: "Delete failed" });
   }
 });
@@ -66,18 +69,26 @@ router.put('/users/:id/suspend', adminMiddleware, async (req, res) => {
 
     res.json(user);
   } catch (err) {
+    console.error("SUSPEND ERROR:", err);
     res.status(500).json({ message: "Suspend failed" });
   }
 });
 
 
-// 💰 UPDATE USER BALANCE (CORE FEATURE)
+// 💰 UPDATE USER BALANCE (FIXED)
 router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
   try {
     const { amount, action } = req.body;
 
-    if (!amount || isNaN(amount)) {
+    console.log("Incoming:", req.body); // 🔍 debug
+
+    // ✅ STRICT VALIDATION
+    if (amount === undefined || amount === null || isNaN(amount)) {
       return res.status(400).json({ message: "Invalid amount" });
+    }
+
+    if (!["add", "subtract", "set"].includes(action)) {
+      return res.status(400).json({ message: "Invalid action" });
     }
 
     const user = await User.findById(req.params.id);
@@ -96,9 +107,6 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
     } 
     else if (action === "set") {
       user.balance = value;
-    } 
-    else {
-      return res.status(400).json({ message: "Invalid action" });
     }
 
     // 🚫 Prevent negative balance
@@ -114,7 +122,7 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("BALANCE ERROR:", err); // 🔥 IMPORTANT
     res.status(500).json({ message: "Balance update failed" });
   }
 });
@@ -132,6 +140,7 @@ router.get('/users/:id/transactions', adminMiddleware, async (req, res) => {
 
     res.json(transactions);
   } catch (err) {
+    console.error("TRANSACTION ERROR:", err);
     res.status(500).json({ message: "Transaction fetch failed" });
   }
 });
