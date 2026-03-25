@@ -75,14 +75,15 @@ router.put('/users/:id/suspend', adminMiddleware, async (req, res) => {
 });
 
 
-// 💰 UPDATE USER BALANCE (FIXED)
+// 💰 UPDATE USER BALANCE (FINAL FIX)
 router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
   try {
     const { amount, action } = req.body;
 
-    console.log("Incoming:", req.body); // 🔍 debug
+    console.log("BODY:", req.body);
+    console.log("USER ID:", req.params.id);
 
-    // ✅ STRICT VALIDATION
+    // ✅ VALIDATION
     if (amount === undefined || amount === null || isNaN(amount)) {
       return res.status(400).json({ message: "Invalid amount" });
     }
@@ -97,6 +98,11 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // 🔥 CRITICAL FIX: ensure balance exists
+    if (typeof user.balance !== "number") {
+      user.balance = 0;
+    }
+
     const value = Number(amount);
 
     if (action === "add") {
@@ -109,7 +115,7 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
       user.balance = value;
     }
 
-    // 🚫 Prevent negative balance
+    // 🚫 Prevent negative
     if (user.balance < 0) {
       user.balance = 0;
     }
@@ -122,7 +128,7 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error("BALANCE ERROR:", err); // 🔥 IMPORTANT
+    console.error("🔥 BALANCE CRASH:", err); // 👈 THIS WILL SHOW REAL ERROR
     res.status(500).json({ message: "Balance update failed" });
   }
 });
