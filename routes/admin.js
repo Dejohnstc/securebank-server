@@ -1,14 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose'); // ✅ IMPORTANT
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const adminMiddleware = require('../middleware/adminMiddleware');
 
 
-// ✅ GET ALL USERS
+// ✅ GET ALL USERS (WITH REGISTRATION DATE)
 router.get('/users', adminMiddleware, async (req, res) => {
   try {
-    const users = await User.find().select('-password -transactionPin');
+    const users = await User.find()
+      .select('-password -transactionPin createdAt'); // ✅ include date
+
     res.json(users);
   } catch (err) {
     console.error("GET USERS ERROR:", err);
@@ -27,7 +30,7 @@ router.get('/users/search', adminMiddleware, async (req, res) => {
         { email: { $regex: query, $options: 'i' } },
         { name: { $regex: query, $options: 'i' } }
       ]
-    }).select('-password -transactionPin');
+    }).select('-password -transactionPin createdAt');
 
     res.json(users);
   } catch (err) {
@@ -40,6 +43,10 @@ router.get('/users/search', adminMiddleware, async (req, res) => {
 // ❌ DELETE USER
 router.delete('/users/:id', adminMiddleware, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
     const user = await User.findByIdAndDelete(req.params.id);
 
     if (!user) {
@@ -57,6 +64,10 @@ router.delete('/users/:id', adminMiddleware, async (req, res) => {
 // 🚫 SUSPEND USER
 router.put('/users/:id/suspend', adminMiddleware, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { status: 'suspended' },
@@ -75,13 +86,18 @@ router.put('/users/:id/suspend', adminMiddleware, async (req, res) => {
 });
 
 
-// 💰 UPDATE USER BALANCE (FINAL FIX)
+// 💰 UPDATE USER BALANCE (FULLY FIXED)
 router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
   try {
     const { amount, action } = req.body;
 
     console.log("BODY:", req.body);
     console.log("USER ID:", req.params.id);
+
+    // ✅ VALIDATE ID (CRITICAL FIX)
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
 
     // ✅ VALIDATION
     if (amount === undefined || amount === null || isNaN(amount)) {
@@ -98,7 +114,7 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 🔥 CRITICAL FIX: ensure balance exists
+    // ✅ ENSURE BALANCE EXISTS
     if (typeof user.balance !== "number") {
       user.balance = 0;
     }
@@ -128,7 +144,7 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error("🔥 BALANCE CRASH:", err); // 👈 THIS WILL SHOW REAL ERROR
+    console.error("🔥 BALANCE CRASH:", err); // 👈 REAL ERROR WILL SHOW
     res.status(500).json({ message: "Balance update failed" });
   }
 });
@@ -137,6 +153,10 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
 // 📊 GET USER TRANSACTIONS
 router.get('/users/:id/transactions', adminMiddleware, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
     const transactions = await Transaction.find({
       $or: [
         { sender: req.params.id },
