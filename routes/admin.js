@@ -38,7 +38,12 @@ router.get('/users/search', adminMiddleware, async (req, res) => {
 // ❌ DELETE USER
 router.delete('/users/:id', adminMiddleware, async (req, res) => {
   try {
-    await User.findByIdAndDelete(req.params.id);
+    const user = await User.findByIdAndDelete(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     res.json({ message: "User deleted" });
   } catch (err) {
     res.status(500).json({ message: "Delete failed" });
@@ -55,9 +60,62 @@ router.put('/users/:id/suspend', adminMiddleware, async (req, res) => {
       { new: true }
     );
 
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     res.json(user);
   } catch (err) {
     res.status(500).json({ message: "Suspend failed" });
+  }
+});
+
+
+// 💰 UPDATE USER BALANCE (CORE FEATURE)
+router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
+  try {
+    const { amount, action } = req.body;
+
+    if (!amount || isNaN(amount)) {
+      return res.status(400).json({ message: "Invalid amount" });
+    }
+
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const value = Number(amount);
+
+    if (action === "add") {
+      user.balance += value;
+    } 
+    else if (action === "subtract") {
+      user.balance -= value;
+    } 
+    else if (action === "set") {
+      user.balance = value;
+    } 
+    else {
+      return res.status(400).json({ message: "Invalid action" });
+    }
+
+    // 🚫 Prevent negative balance
+    if (user.balance < 0) {
+      user.balance = 0;
+    }
+
+    await user.save();
+
+    res.json({
+      message: "Balance updated successfully",
+      balance: user.balance
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Balance update failed" });
   }
 });
 
