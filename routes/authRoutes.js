@@ -24,17 +24,9 @@ router.post("/register", async (req, res) => {
 
       if (existingUser.status === "deleted") {
 
-        const user = new User({
-  name,
-  email,
-  password,           // ✅ plain
-  transactionPin: "0000" // ✅ plain
-});
-
         existingUser.name = name;
-       existingUser.password = password 
-existingUser.transactionPin = "0000"     //  FIXED
-        existingUser.transactionPin = hashedPin;     // ✅ FIXED
+        existingUser.password = password; // ✅ plain (model hashes)
+        existingUser.transactionPin = transactionPin || "0000";
         existingUser.status = "active";
 
         await existingUser.save();
@@ -48,16 +40,12 @@ existingUser.transactionPin = "0000"     //  FIXED
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // 🔐 HASH PASSWORD + PIN
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const hashedPin = await bcrypt.hash(transactionPin || "0000", 10);
-
-    // ✅ CREATE USER
+    // ✅ CREATE USER (NO HASHING HERE)
     const user = new User({
       name,
       email,
-      password: hashedPassword,        // ✅ FIXED
-      transactionPin: hashedPin        // ✅ FIXED
+      password, // ✅ plain
+      transactionPin: transactionPin || "0000"
     });
 
     await user.save();
@@ -101,7 +89,6 @@ router.post("/login", async (req, res) => {
       return res.status(403).json({ message: "Account does not exist" });
     }
 
-    // ✅ SAFE COMPARE
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
