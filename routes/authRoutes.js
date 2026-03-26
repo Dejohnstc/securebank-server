@@ -13,21 +13,39 @@ router.post("/register", async (req, res) => {
     const { name, email, password, transactionPin } = req.body;
 
     // 🔍 Basic validation
-    if (!name || !email || !password || !transactionPin) {
-      return res.status(400).json({ message: "All fields are required" });
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email and password are required" });
     }
 
     const existingUser = await User.findOne({ email });
+
     if (existingUser) {
+
+      // 🔁 RESTORE DELETED USER
+      if (existingUser.status === "deleted") {
+
+        existingUser.name = name;
+        existingUser.password = password;
+        existingUser.transactionPin = transactionPin || "0000";
+        existingUser.status = "active";
+
+        await existingUser.save();
+
+        return res.json({
+          message: "Account restored successfully",
+          accountNumber: existingUser.accountNumber
+        });
+      }
+
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // ✅ NO HASHING HERE (schema handles it)
+    // ✅ CREATE NEW USER
     const user = new User({
       name,
       email,
       password,
-      transactionPin
+      transactionPin: transactionPin || "0000"
     });
 
     await user.save();
@@ -38,7 +56,7 @@ router.post("/register", async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("REGISTER ERROR:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -61,9 +79,14 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // 🚫 BLOCK SUSPENDED USERS
+    // 🚫 BLOCK SUSPENDED
     if (user.status === "suspended") {
       return res.status(403).json({ message: "Account suspended" });
+    }
+
+    // 🚫 BLOCK DELETED
+    if (user.status === "deleted") {
+      return res.status(403).json({ message: "Account does not exist" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -94,7 +117,7 @@ router.post("/login", async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("LOGIN ERROR:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
