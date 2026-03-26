@@ -6,11 +6,11 @@ const Transaction = require('../models/Transaction');
 const adminMiddleware = require('../middleware/adminMiddleware');
 
 
-// ✅ GET ALL USERS (EXCLUDE DELETED + INCLUDE DATE)
+// ✅ GET ALL USERS (EXCLUDE DELETED)
 router.get('/users', adminMiddleware, async (req, res) => {
   try {
     const users = await User.find({ status: { $ne: "deleted" } })
-      .select('-password -transactionPin')
+      .select('-password -transactionPin');
 
     res.json(users);
   } catch (err) {
@@ -31,7 +31,7 @@ router.get('/users/search', adminMiddleware, async (req, res) => {
         { email: { $regex: query, $options: 'i' } },
         { name: { $regex: query, $options: 'i' } }
       ]
-    }).select('-password -transactionPin')
+    }).select('-password -transactionPin');
 
     res.json(users);
   } catch (err) {
@@ -41,12 +41,11 @@ router.get('/users/search', adminMiddleware, async (req, res) => {
 });
 
 
-// 🛑 SOFT DELETE USER (SAFE)
+// 🛑 SOFT DELETE USER
 router.delete('/users/:id', adminMiddleware, async (req, res) => {
   try {
     const userId = req.params.id;
 
-    // ✅ Validate ID
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: "Invalid user ID" });
     }
@@ -57,21 +56,18 @@ router.delete('/users/:id', adminMiddleware, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 🚫 BLOCK deleting admin
     if (user.role === "admin") {
       return res.status(403).json({ message: "Cannot delete admin account" });
     }
 
-    // 🚫 BLOCK deleting yourself
     if (userId === req.user.id) {
       return res.status(403).json({ message: "You cannot delete yourself" });
     }
 
-    // ✅ SOFT DELETE
     user.status = "deleted";
     await user.save();
 
-    res.json({ message: "User deleted safely (soft delete)" });
+    res.json({ message: "User deleted safely" });
 
   } catch (err) {
     console.error("DELETE ERROR:", err);
@@ -105,10 +101,14 @@ router.put('/users/:id/suspend', adminMiddleware, async (req, res) => {
 });
 
 
-// 💰 UPDATE USER BALANCE
+// 💰 UPDATE USER BALANCE (FIXED)
 router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
   try {
-    const { amount, action } = req.body;
+    const body = req.body || {}; // ✅ FIX
+    const amount = body.amount;
+    const action = body.action;
+
+    console.log("BODY:", body); // 🔥 debug
 
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid user ID" });
@@ -148,7 +148,7 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error("BALANCE ERROR:", err);
+    console.error("🔥 BALANCE ERROR:", err);
     res.status(500).json({ message: "Balance update failed" });
   }
 });
