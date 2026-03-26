@@ -12,21 +12,24 @@ router.post("/register", async (req, res) => {
   try {
     const { name, email, password, transactionPin } = req.body;
 
-    // 🔍 Basic validation
+    // ✅ VALIDATION
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Name, email and password are required" });
     }
 
     const existingUser = await User.findOne({ email });
 
+    // 🔁 RESTORE DELETED USER
     if (existingUser) {
 
-      // 🔁 RESTORE DELETED USER
       if (existingUser.status === "deleted") {
 
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPin = await bcrypt.hash(transactionPin || "0000", 10);
+
         existingUser.name = name;
-        existingUser.password = password;
-        existingUser.transactionPin = transactionPin || "0000";
+        existingUser.password = hashedPassword;      // ✅ FIXED
+        existingUser.transactionPin = hashedPin;     // ✅ FIXED
         existingUser.status = "active";
 
         await existingUser.save();
@@ -40,12 +43,16 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // ✅ CREATE NEW USER
+    // 🔐 HASH PASSWORD + PIN
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPin = await bcrypt.hash(transactionPin || "0000", 10);
+
+    // ✅ CREATE USER
     const user = new User({
       name,
       email,
-      password,
-      transactionPin: transactionPin || "0000"
+      password: hashedPassword,        // ✅ FIXED
+      transactionPin: hashedPin        // ✅ FIXED
     });
 
     await user.save();
@@ -89,6 +96,7 @@ router.post("/login", async (req, res) => {
       return res.status(403).json({ message: "Account does not exist" });
     }
 
+    // ✅ SAFE COMPARE
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
