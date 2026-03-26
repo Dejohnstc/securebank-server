@@ -50,7 +50,7 @@ const userSchema = new mongoose.Schema(
 
   status: {
     type: String,
-    enum: ["active", "suspended"],
+    enum: ["active", "suspended", "deleted"], // ✅ include deleted
     default: "active"
   }
 
@@ -59,37 +59,17 @@ const userSchema = new mongoose.Schema(
 );
 
 
-// 🔐 AUTO HASH PASSWORD & PIN
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password") && !this.isModified("transactionPin")) {
-    return next();
-  }
-
-  const salt = await bcrypt.genSalt(10);
-
-  if (this.isModified("password")) {
-    this.password = await bcrypt.hash(this.password, salt);
-  }
-
-  if (this.isModified("transactionPin")) {
-    this.transactionPin = await bcrypt.hash(this.transactionPin, salt);
-  }
-
-  next();
-});
-
-
-// 🏦 AUTO GENERATE ACCOUNT NUMBER
+// 🔐 SINGLE CLEAN HASH HOOK (ONLY ONE!)
 userSchema.pre("save", async function (next) {
   try {
-    // 🔐 HASH PASSWORD
+    const salt = await bcrypt.genSalt(10);
+
     if (this.isModified("password")) {
-      this.password = await bcrypt.hash(this.password, 10);
+      this.password = await bcrypt.hash(this.password, salt);
     }
 
-    // 🔐 HASH PIN
     if (this.isModified("transactionPin")) {
-      this.transactionPin = await bcrypt.hash(this.transactionPin, 10);
+      this.transactionPin = await bcrypt.hash(this.transactionPin, salt);
     }
 
     next();
@@ -99,6 +79,13 @@ userSchema.pre("save", async function (next) {
 });
 
 
-// ⚡ INDEX FOR FAST SEARCH
+// 🏦 AUTO GENERATE ACCOUNT NUMBER (OPTIONAL SAFE VERSION)
+userSchema.pre("save", function (next) {
+  if (!this.accountNumber) {
+    this.accountNumber = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+  }
+  next();
+});
+
 
 module.exports = mongoose.model("User", userSchema);
