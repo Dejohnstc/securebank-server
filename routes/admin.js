@@ -10,7 +10,7 @@ const adminMiddleware = require('../middleware/adminMiddleware');
 router.get('/users', adminMiddleware, async (req, res) => {
   try {
     const users = await User.find({ status: { $ne: "deleted" } })
-      .select('-password -transactionPin createdAt');
+      .select('-password -transactionPin')
 
     res.json(users);
   } catch (err) {
@@ -31,7 +31,7 @@ router.get('/users/search', adminMiddleware, async (req, res) => {
         { email: { $regex: query, $options: 'i' } },
         { name: { $regex: query, $options: 'i' } }
       ]
-    }).select('-password -transactionPin createdAt');
+    }).select('-password -transactionPin')
 
     res.json(users);
   } catch (err) {

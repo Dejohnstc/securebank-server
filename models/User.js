@@ -80,13 +80,22 @@ userSchema.pre("save", async function (next) {
 
 
 // 🏦 AUTO GENERATE ACCOUNT NUMBER
-userSchema.pre("save", function (next) {
-  if (!this.accountNumber) {
-    this.accountNumber = Math.floor(
-      1000000000 + Math.random() * 9000000000
-    ).toString();
+userSchema.pre("save", async function (next) {
+  try {
+    // 🔐 HASH PASSWORD
+    if (this.isModified("password")) {
+      this.password = await bcrypt.hash(this.password, 10);
+    }
+
+    // 🔐 HASH PIN
+    if (this.isModified("transactionPin")) {
+      this.transactionPin = await bcrypt.hash(this.transactionPin, 10);
+    }
+
+    next();
+  } catch (err) {
+    next(err);
   }
-  next();
 });
 
 
