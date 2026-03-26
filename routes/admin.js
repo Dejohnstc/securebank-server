@@ -1,16 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose'); // ✅ IMPORTANT
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const adminMiddleware = require('../middleware/adminMiddleware');
 
 
-// ✅ GET ALL USERS (WITH REGISTRATION DATE)
+// ✅ GET ALL USERS (EXCLUDE DELETED + INCLUDE DATE)
 router.get('/users', adminMiddleware, async (req, res) => {
   try {
-    const users = await User.find()
-      .select('-password -transactionPin createdAt'); // ✅ include date
+    const users = await User.find({ status: { $ne: "deleted" } })
+      .select('-password -transactionPin createdAt');
 
     res.json(users);
   } catch (err) {
@@ -26,6 +26,7 @@ router.get('/users/search', adminMiddleware, async (req, res) => {
     const { query } = req.query;
 
     const users = await User.find({
+      status: { $ne: "deleted" },
       $or: [
         { email: { $regex: query, $options: 'i' } },
         { name: { $regex: query, $options: 'i' } }
@@ -40,20 +41,38 @@ router.get('/users/search', adminMiddleware, async (req, res) => {
 });
 
 
-// ❌ DELETE USER
+// 🛑 SOFT DELETE USER (SAFE)
 router.delete('/users/:id', adminMiddleware, async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    const userId = req.params.id;
+
+    // ✅ Validate ID
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: "Invalid user ID" });
     }
 
-    const user = await User.findByIdAndDelete(req.params.id);
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.json({ message: "User deleted" });
+    // 🚫 BLOCK deleting admin
+    if (user.role === "admin") {
+      return res.status(403).json({ message: "Cannot delete admin account" });
+    }
+
+    // 🚫 BLOCK deleting yourself
+    if (userId === req.user.id) {
+      return res.status(403).json({ message: "You cannot delete yourself" });
+    }
+
+    // ✅ SOFT DELETE
+    user.status = "deleted";
+    await user.save();
+
+    res.json({ message: "User deleted safely (soft delete)" });
+
   } catch (err) {
     console.error("DELETE ERROR:", err);
     res.status(500).json({ message: "Delete failed" });
@@ -86,20 +105,15 @@ router.put('/users/:id/suspend', adminMiddleware, async (req, res) => {
 });
 
 
-// 💰 UPDATE USER BALANCE (FULLY FIXED)
+// 💰 UPDATE USER BALANCE
 router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
   try {
     const { amount, action } = req.body;
 
-    console.log("BODY:", req.body);
-    console.log("USER ID:", req.params.id);
-
-    // ✅ VALIDATE ID (CRITICAL FIX)
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid user ID" });
     }
 
-    // ✅ VALIDATION
     if (amount === undefined || amount === null || isNaN(amount)) {
       return res.status(400).json({ message: "Invalid amount" });
     }
@@ -114,27 +128,17 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // ✅ ENSURE BALANCE EXISTS
     if (typeof user.balance !== "number") {
       user.balance = 0;
     }
 
     const value = Number(amount);
 
-    if (action === "add") {
-      user.balance += value;
-    } 
-    else if (action === "subtract") {
-      user.balance -= value;
-    } 
-    else if (action === "set") {
-      user.balance = value;
-    }
+    if (action === "add") user.balance += value;
+    if (action === "subtract") user.balance -= value;
+    if (action === "set") user.balance = value;
 
-    // 🚫 Prevent negative
-    if (user.balance < 0) {
-      user.balance = 0;
-    }
+    if (user.balance < 0) user.balance = 0;
 
     await user.save();
 
@@ -144,7 +148,7 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error("🔥 BALANCE CRASH:", err); // 👈 REAL ERROR WILL SHOW
+    console.error("BALANCE ERROR:", err);
     res.status(500).json({ message: "Balance update failed" });
   }
 });
