@@ -24,11 +24,16 @@ router.post("/register", async (req, res) => {
 
       if (existingUser.status === "deleted") {
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const hashedPin = await bcrypt.hash(transactionPin || "0000", 10);
+        const user = new User({
+  name,
+  email,
+  password,           // ✅ plain
+  transactionPin: "0000" // ✅ plain
+});
 
         existingUser.name = name;
-        existingUser.password = hashedPassword;      // ✅ FIXED
+       existingUser.password = password 
+existingUser.transactionPin = "0000"     //  FIXED
         existingUser.transactionPin = hashedPin;     // ✅ FIXED
         existingUser.status = "active";
 
