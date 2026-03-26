@@ -50,7 +50,7 @@ const userSchema = new mongoose.Schema(
 
   status: {
     type: String,
-    enum: ["active", "suspended", "deleted"], // ✅ include deleted
+    enum: ["active", "suspended", "deleted"],
     default: "active"
   }
 
@@ -59,32 +59,25 @@ const userSchema = new mongoose.Schema(
 );
 
 
-// 🔐 SINGLE CLEAN HASH HOOK (ONLY ONE!)
-userSchema.pre("save", async function (next) {
-  try {
-    const salt = await bcrypt.genSalt(10);
+// 🔐 HASH PASSWORD + PIN (NO next())
+userSchema.pre("save", async function () {
 
-    if (this.isModified("password")) {
-      this.password = await bcrypt.hash(this.password, salt);
-    }
-
-    if (this.isModified("transactionPin")) {
-      this.transactionPin = await bcrypt.hash(this.transactionPin, salt);
-    }
-
-    next();
-  } catch (err) {
-    next(err);
+  if (this.isModified("password")) {
+    this.password = await bcrypt.hash(this.password, 10);
   }
+
+  if (this.isModified("transactionPin")) {
+    this.transactionPin = await bcrypt.hash(this.transactionPin, 10);
+  }
+
 });
 
 
-// 🏦 AUTO GENERATE ACCOUNT NUMBER (OPTIONAL SAFE VERSION)
-userSchema.pre("save", function (next) {
+// 🏦 GENERATE ACCOUNT NUMBER
+userSchema.pre("save", function () {
   if (!this.accountNumber) {
     this.accountNumber = Math.floor(1000000000 + Math.random() * 9000000000).toString();
   }
-  next();
 });
 
 
