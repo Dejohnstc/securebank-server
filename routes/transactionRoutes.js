@@ -14,7 +14,7 @@ router.post("/transfer", authMiddleware, async (req, res) => {
 
 try {
 
-const sender = await User.findById(req.user);
+const sender = await User.findById(req.user.id || req.user);
 
 const { receiverEmail, accountNumber, amount } = req.body;
 
@@ -25,6 +25,24 @@ const numericAmount = Number(amount);
 
 if (!numericAmount || numericAmount <= 0) {
 return res.status(400).json({ message: "Invalid transfer amount" });
+}
+
+
+/* 🚫 RULE 1: MAX $5000 */
+
+if (numericAmount > 5000) {
+return res.status(400).json({
+message: "Maximum transfer amount is $5000"
+});
+}
+
+
+/* CHECK BALANCE */
+
+if (sender.balance < numericAmount) {
+return res.status(400).json({
+message: "Insufficient funds"
+});
 }
 
 
@@ -52,10 +70,9 @@ return res.status(400).json({ message: "Cannot transfer to yourself" });
 }
 
 
-/* CHECK BALANCE */
-/* DAILY TRANSFER LIMIT */
+/* 🚫 RULE 3: DAILY TRANSFER LIMIT */
 
-const DAILY_LIMIT = 100000;
+const DAILY_LIMIT = 10000; // 🔥 updated to realistic value
 
 const todayStart = new Date();
 todayStart.setHours(0,0,0,0);
@@ -118,6 +135,8 @@ transaction
 
 } catch (error) {
 
+console.error("TRANSFER ERROR:", error);
+
 res.status(500).json({
 message: "Transfer failed",
 error: error.message
@@ -138,8 +157,8 @@ try {
 
 const transactions = await Transaction.find({
 $or: [
-{ sender: req.user },
-{ receiver: req.user }
+{ sender: req.user.id || req.user },
+{ receiver: req.user.id || req.user }
 ]
 })
 .populate("sender", "name")
