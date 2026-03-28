@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
+const Settings = require('../models/Settings'); // ✅ NEW
 const adminMiddleware = require('../middleware/adminMiddleware');
 
 
@@ -101,14 +102,12 @@ router.put('/users/:id/suspend', adminMiddleware, async (req, res) => {
 });
 
 
-// 💰 UPDATE USER BALANCE (FIXED)
+// 💰 UPDATE USER BALANCE
 router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
   try {
-    const body = req.body || {}; // ✅ FIX
+    const body = req.body || {};
     const amount = body.amount;
     const action = body.action;
-
-    console.log("BODY:", body); // 🔥 debug
 
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid user ID" });
@@ -148,7 +147,7 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error("🔥 BALANCE ERROR:", err);
+    console.error("BALANCE ERROR:", err);
     res.status(500).json({ message: "Balance update failed" });
   }
 });
@@ -174,5 +173,61 @@ router.get('/users/:id/transactions', adminMiddleware, async (req, res) => {
     res.status(500).json({ message: "Transaction fetch failed" });
   }
 });
+
+
+/* =========================
+   ⚙️ ADMIN LIMIT CONTROL (NEW)
+========================= */
+
+// ✅ GET CURRENT LIMITS
+router.get('/settings/limits', adminMiddleware, async (req, res) => {
+  try {
+    let settings = await Settings.findOne();
+
+    if (!settings) {
+      settings = await Settings.create({});
+    }
+
+    res.json(settings);
+
+  } catch (err) {
+    console.error("GET LIMIT ERROR:", err);
+    res.status(500).json({ message: "Failed to fetch limits" });
+  }
+});
+
+
+// ✅ UPDATE LIMITS
+router.put('/settings/limits', adminMiddleware, async (req, res) => {
+  try {
+    const { dailyLimit, singleTransferLimit } = req.body;
+
+    let settings = await Settings.findOne();
+
+    if (!settings) {
+      settings = new Settings();
+    }
+
+    if (dailyLimit !== undefined) {
+      settings.dailyLimit = Number(dailyLimit);
+    }
+
+    if (singleTransferLimit !== undefined) {
+      settings.singleTransferLimit = Number(singleTransferLimit);
+    }
+
+    await settings.save();
+
+    res.json({
+      message: "Limits updated successfully",
+      settings
+    });
+
+  } catch (err) {
+    console.error("SETTINGS ERROR:", err);
+    res.status(500).json({ message: "Failed to update limits" });
+  }
+});
+
 
 module.exports = router;
