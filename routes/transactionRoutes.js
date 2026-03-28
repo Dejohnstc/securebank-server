@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const mongoose = require("mongoose"); // ✅ IMPORTANT
+const mongoose = require("mongoose");
 
 const User = require("../models/User");
 const Transaction = require("../models/Transaction");
@@ -15,11 +15,14 @@ router.post("/transfer", authMiddleware, async (req, res) => {
 
 const session = await mongoose.startSession();
 
+let senderId = req.user.id || req.user;
+let numericAmount = Number(req.body.amount);
+
 try {
 
 await session.startTransaction();
 
-const sender = await User.findById(req.user.id || req.user).session(session);
+const sender = await User.findById(senderId).session(session);
 
 if (!sender) {
 throw new Error("Sender not found");
@@ -27,7 +30,7 @@ throw new Error("Sender not found");
 
 const { receiverEmail, accountNumber, amount } = req.body;
 
-const numericAmount = Number(amount);
+numericAmount = Number(amount);
 
 
 /* VALIDATE AMOUNT */
@@ -75,7 +78,7 @@ throw new Error("Cannot transfer to yourself");
 }
 
 
-/* 🚫 RULE 3: DAILY TRANSFER LIMIT */
+/* 🚫 DAILY LIMIT */
 
 const DAILY_LIMIT = 10000;
 
@@ -97,7 +100,7 @@ throw new Error(`Daily transfer limit of $${DAILY_LIMIT.toLocaleString()} exceed
 }
 
 
-/* 🔥 SAFE PROCESS (ATOMIC) */
+/* 🔥 PROCESS */
 
 sender.balance -= numericAmount;
 receiver.balance += numericAmount;
@@ -106,7 +109,7 @@ await sender.save({ session });
 await receiver.save({ session });
 
 
-/* GENERATE BANK REFERENCE */
+/* GENERATE REFERENCE */
 
 const reference =
 "SBK-" +
@@ -115,7 +118,7 @@ new Date().getFullYear() +
 Math.random().toString(36).substring(2,10).toUpperCase();
 
 
-/* SAVE TRANSACTION */
+/* SAVE SUCCESS TX */
 
 await Transaction.create([{
 sender: sender._id,
@@ -126,13 +129,8 @@ status: "completed"
 }], { session });
 
 
-/* ✅ COMMIT EVERYTHING */
-
 await session.commitTransaction();
 session.endSession();
-
-
-/* RESPONSE */
 
 res.json({
 message: "Transfer successful",
@@ -145,6 +143,25 @@ await session.abortTransaction();
 session.endSession();
 
 console.error("TRANSFER ERROR:", error);
+
+
+/* 🔥 SAVE FAILED TRANSACTION (OUTSIDE SESSION) */
+
+try {
+
+await Transaction.create({
+sender: senderId,
+receiver: null,
+amount: numericAmount || 0,
+reference: "FAILED-" + Date.now(),
+status: "failed",
+note: error.message
+});
+
+} catch (saveErr) {
+console.error("FAILED TX SAVE ERROR:", saveErr);
+}
+
 
 res.status(400).json({
 message: error.message || "Transfer failed"
