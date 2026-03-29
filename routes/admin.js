@@ -1,13 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
-const Settings = require('../models/Settings'); // ✅ NEW
+const Settings = require('../models/Settings');
 const adminMiddleware = require('../middleware/adminMiddleware');
 
 
-// ✅ GET ALL USERS (EXCLUDE DELETED)
+/* =========================
+   👥 USERS
+========================= */
+
+// ✅ GET ALL USERS
 router.get('/users', adminMiddleware, async (req, res) => {
   try {
     const users = await User.find({ status: { $ne: "deleted" } })
@@ -42,7 +47,7 @@ router.get('/users/search', adminMiddleware, async (req, res) => {
 });
 
 
-// 🛑 SOFT DELETE USER
+// 🛑 DELETE USER (SOFT)
 router.delete('/users/:id', adminMiddleware, async (req, res) => {
   try {
     const userId = req.params.id;
@@ -53,9 +58,7 @@ router.delete('/users/:id', adminMiddleware, async (req, res) => {
 
     const user = await User.findById(userId);
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     if (user.role === "admin") {
       return res.status(403).json({ message: "Cannot delete admin account" });
@@ -90,11 +93,10 @@ router.put('/users/:id/suspend', adminMiddleware, async (req, res) => {
       { new: true }
     );
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     res.json(user);
+
   } catch (err) {
     console.error("SUSPEND ERROR:", err);
     res.status(500).json({ message: "Suspend failed" });
@@ -102,18 +104,17 @@ router.put('/users/:id/suspend', adminMiddleware, async (req, res) => {
 });
 
 
-// 💰 UPDATE USER BALANCE
+// 💰 UPDATE BALANCE
 router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
   try {
-    const body = req.body || {};
-    const amount = body.amount;
-    const action = body.action;
+
+    const { amount, action } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid user ID" });
     }
 
-    if (amount === undefined || amount === null || isNaN(amount)) {
+    if (isNaN(amount)) {
       return res.status(400).json({ message: "Invalid amount" });
     }
 
@@ -123,13 +124,7 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
 
     const user = await User.findById(req.params.id);
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    if (typeof user.balance !== "number") {
-      user.balance = 0;
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     const value = Number(amount);
 
@@ -153,52 +148,10 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
 });
 
 
-// 📊 GET USER TRANSACTIONS
-router.get('/users/:id/transactions', adminMiddleware, async (req, res) => {
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ message: "Invalid user ID" });
-    }
-
-    const transactions = await Transaction.find({
-      $or: [
-        { sender: req.params.id },
-        { receiver: req.params.id }
-      ]
-    });
-
-    res.json(transactions);
-  } catch (err) {
-    console.error("TRANSACTION ERROR:", err);
-    res.status(500).json({ message: "Transaction fetch failed" });
-  }
-});
-
-
 /* =========================
-   ⚙️ ADMIN LIMIT CONTROL (NEW)
+   🔐 FIXED PASSWORD CHANGE
 ========================= */
 
-// ✅ GET CURRENT LIMITS
-router.get('/settings/limits', adminMiddleware, async (req, res) => {
-  try {
-    let settings = await Settings.findOne();
-
-    if (!settings) {
-      settings = await Settings.create({});
-    }
-
-    res.json(settings);
-
-  } catch (err) {
-    console.error("GET LIMIT ERROR:", err);
-    res.status(500).json({ message: "Failed to fetch limits" });
-  }
-});
-
-const bcrypt = require("bcryptjs");
-
-// 🔐 ADMIN CHANGE USER PASSWORD
 router.put('/users/:id/password', adminMiddleware, async (req, res) => {
   try {
 
@@ -212,23 +165,18 @@ router.put('/users/:id/password', adminMiddleware, async (req, res) => {
 
     const user = await User.findById(req.params.id);
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // 🚫 PROTECT ADMIN ACCOUNT
     if (user.role === "admin") {
       return res.status(403).json({
         message: "Cannot change admin password here"
       });
     }
 
-    // 🔥 HASH PASSWORD
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // ✅ FIX: SAVE PLAIN PASSWORD
+    user.password = password;
 
-    user.password = hashedPassword;
-
-    await user.save();
+    await user.save(); // 🔥 model hashes it
 
     res.json({ message: "Password updated successfully" });
 
@@ -237,81 +185,81 @@ router.put('/users/:id/password', adminMiddleware, async (req, res) => {
     res.status(500).json({ message: "Password update failed" });
   }
 });
-// 🔥 UPDATE USER REGISTRATION DATE (SAFE VERSION)
+
+
+/* =========================
+   📅 UPDATE REG DATE
+========================= */
+
 router.put('/users/:id/createdAt', adminMiddleware, async (req, res) => {
   try {
 
-    const userId = req.params.id;
     const { createdAt } = req.body;
 
-    // ✅ VALIDATE ID
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid user ID" });
     }
 
-    // ✅ VALIDATE DATE
     if (!createdAt || isNaN(new Date(createdAt))) {
       return res.status(400).json({ message: "Invalid date" });
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(req.params.id);
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // 🚫 PROTECT ADMIN ACCOUNT
     if (user.role === "admin") {
-      return res.status(403).json({ message: "Cannot modify admin account" });
+      return res.status(403).json({ message: "Cannot modify admin" });
     }
 
-    // ✅ UPDATE DATE
     user.createdAt = new Date(createdAt);
+
     await user.save();
 
-    res.json({
-      message: "Registration date updated successfully",
-      user
-    });
+    res.json({ message: "Registration date updated" });
 
   } catch (err) {
-    console.error("DATE UPDATE ERROR:", err);
+    console.error("DATE ERROR:", err);
     res.status(500).json({ message: "Update failed" });
   }
 });
 
-// ✅ UPDATE LIMITS
-router.put('/settings/limits', adminMiddleware, async (req, res) => {
-  try {
-    const { dailyLimit, singleTransferLimit } = req.body;
 
+/* =========================
+   ⚙️ LIMIT SETTINGS
+========================= */
+
+router.get('/settings/limits', adminMiddleware, async (req, res) => {
+  try {
     let settings = await Settings.findOne();
 
-    if (!settings) {
-      settings = new Settings();
-    }
+    if (!settings) settings = await Settings.create({});
 
-    if (dailyLimit !== undefined) {
-      settings.dailyLimit = Number(dailyLimit);
-    }
-
-    if (singleTransferLimit !== undefined) {
-      settings.singleTransferLimit = Number(singleTransferLimit);
-    }
-
-    await settings.save();
-
-    res.json({
-      message: "Limits updated successfully",
-      settings
-    });
+    res.json(settings);
 
   } catch (err) {
-    console.error("SETTINGS ERROR:", err);
-    res.status(500).json({ message: "Failed to update limits" });
+    res.status(500).json({ message: "Failed to fetch limits" });
   }
 });
 
+router.put('/settings/limits', adminMiddleware, async (req, res) => {
+  try {
 
+    const { dailyLimit, singleTransferLimit } = req.body;
+
+    let settings = await Settings.findOne();
+    if (!settings) settings = new Settings();
+
+    if (dailyLimit !== undefined) settings.dailyLimit = Number(dailyLimit);
+    if (singleTransferLimit !== undefined) settings.singleTransferLimit = Number(singleTransferLimit);
+
+    await settings.save();
+
+    res.json({ message: "Limits updated successfully" });
+
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update limits" });
+  }
+});
 
 module.exports = router;
