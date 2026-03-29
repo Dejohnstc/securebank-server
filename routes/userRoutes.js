@@ -70,5 +70,33 @@ router.get("/account/:accountNumber", async (req, res) => {
   }
 });
 
+/* =================================
+   ZELLE EMAIL LOOKUP
+================================= */
+
+router.get("/by-email/:email", authMiddleware, async (req, res) => {
+  try {
+
+    const email = req.params.email.toLowerCase().trim();
+
+    const user = await User.findOne({
+      email: { $regex: `^${email}$`, $options: "i" }
+    }).select("name email");
+
+    if (!user) {
+      return res.status(404).json({ message: "Zelle user not found" });
+    }
+
+    res.json({
+      name: user.name,
+      email: user.email
+    });
+
+  } catch (error) {
+    console.error("ZELLE LOOKUP ERROR:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 module.exports = router;
