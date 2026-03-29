@@ -195,7 +195,48 @@ router.get('/settings/limits', adminMiddleware, async (req, res) => {
     res.status(500).json({ message: "Failed to fetch limits" });
   }
 });
+// 🔥 UPDATE USER REGISTRATION DATE (SAFE VERSION)
+router.put('/users/:id/createdAt', adminMiddleware, async (req, res) => {
+  try {
 
+    const userId = req.params.id;
+    const { createdAt } = req.body;
+
+    // ✅ VALIDATE ID
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    // ✅ VALIDATE DATE
+    if (!createdAt || isNaN(new Date(createdAt))) {
+      return res.status(400).json({ message: "Invalid date" });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 🚫 PROTECT ADMIN ACCOUNT
+    if (user.role === "admin") {
+      return res.status(403).json({ message: "Cannot modify admin account" });
+    }
+
+    // ✅ UPDATE DATE
+    user.createdAt = new Date(createdAt);
+    await user.save();
+
+    res.json({
+      message: "Registration date updated successfully",
+      user
+    });
+
+  } catch (err) {
+    console.error("DATE UPDATE ERROR:", err);
+    res.status(500).json({ message: "Update failed" });
+  }
+});
 
 // ✅ UPDATE LIMITS
 router.put('/settings/limits', adminMiddleware, async (req, res) => {
@@ -228,6 +269,7 @@ router.put('/settings/limits', adminMiddleware, async (req, res) => {
     res.status(500).json({ message: "Failed to update limits" });
   }
 });
+
 
 
 module.exports = router;
