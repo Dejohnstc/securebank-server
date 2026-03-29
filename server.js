@@ -13,7 +13,8 @@ const allowedOrigins = [
   "http://localhost:5173",
   "https://securebank-client.vercel.app",
   "https://securebank.obiresoffice.com",
-  "https://securedbank.llc"
+  "https://securedbank.llc",
+  "https://www.securedbank.llc",
 ];
 
 const corsOptions = {
