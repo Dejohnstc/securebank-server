@@ -195,6 +195,48 @@ router.get('/settings/limits', adminMiddleware, async (req, res) => {
     res.status(500).json({ message: "Failed to fetch limits" });
   }
 });
+
+const bcrypt = require("bcryptjs");
+
+// 🔐 ADMIN CHANGE USER PASSWORD
+router.put('/users/:id/password', adminMiddleware, async (req, res) => {
+  try {
+
+    const { password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters"
+      });
+    }
+
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 🚫 PROTECT ADMIN ACCOUNT
+    if (user.role === "admin") {
+      return res.status(403).json({
+        message: "Cannot change admin password here"
+      });
+    }
+
+    // 🔥 HASH PASSWORD
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    user.password = hashedPassword;
+
+    await user.save();
+
+    res.json({ message: "Password updated successfully" });
+
+  } catch (err) {
+    console.error("ADMIN PASSWORD ERROR:", err);
+    res.status(500).json({ message: "Password update failed" });
+  }
+});
 // 🔥 UPDATE USER REGISTRATION DATE (SAFE VERSION)
 router.put('/users/:id/createdAt', adminMiddleware, async (req, res) => {
   try {
