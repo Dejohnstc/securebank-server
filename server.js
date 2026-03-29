@@ -12,7 +12,8 @@ connectDB();
 const allowedOrigins = [
   "http://localhost:5173",
   "https://securebank-client.vercel.app",
-  "https://securebank.obiresoffice.com"
+  "https://securebank.obiresoffice.com",
+  "https://securebank.llc"
 ];
 
 const corsOptions = {
