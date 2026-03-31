@@ -11,12 +11,71 @@ const router = express.Router();
 
 router.get("/profile", authMiddleware, async (req, res) => {
   try {
+
     const user = await User.findById(req.user).select("-password");
+
     res.json(user);
+
   } catch (error) {
+
     res.status(500).json({ error: error.message });
+
   }
 });
+
+
+/* =================================
+   UPDATE USER PROFILE 🔥 NEW
+================================= */
+
+router.put("/update-profile", authMiddleware, async (req, res) => {
+  try {
+
+    const user = await User.findById(req.user);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 🔥 ONLY ALLOW SAFE FIELDS
+    const {
+      phone,
+      address,
+      city,
+      state,
+      country,
+      zip
+    } = req.body;
+
+    if (phone !== undefined) user.phone = phone;
+    if (address !== undefined) user.address = address;
+    if (city !== undefined) user.city = city;
+    if (state !== undefined) user.state = state;
+    if (country !== undefined) user.country = country;
+    if (zip !== undefined) user.zip = zip;
+
+    await user.save();
+
+    res.json({
+      message: "Profile updated successfully"
+    });
+
+  } catch (error) {
+
+    console.error("UPDATE PROFILE ERROR:", error);
+
+    res.status(500).json({
+      message: "Failed to update profile"
+    });
+
+  }
+});
+
+
+/* =================================
+   CHANGE TRANSACTION PIN
+================================= */
+
 router.post("/change-pin", authMiddleware, async (req,res)=>{
 
 try{
@@ -66,12 +125,15 @@ router.get("/account/:accountNumber", async (req, res) => {
     });
 
   } catch (error) {
+
     res.status(500).json({ error: error.message });
+
   }
 });
 
+
 /* =================================
-   ZELLE EMAIL LOOKUP
+   ZELLE EMAIL LOOKUP (FIXED)
 ================================= */
 
 router.get("/by-email/:email", authMiddleware, async (req, res) => {
@@ -79,9 +141,8 @@ router.get("/by-email/:email", authMiddleware, async (req, res) => {
 
     const email = req.params.email.toLowerCase().trim();
 
-    const user = await User.findOne({
-      email: { $regex: `^${email}$`, $options: "i" }
-    }).select("name email");
+    // 🔥 FAST QUERY (NO REGEX)
+    const user = await User.findOne({ email }).select("name email");
 
     if (!user) {
       return res.status(404).json({ message: "Zelle user not found" });
@@ -93,8 +154,11 @@ router.get("/by-email/:email", authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
+
     console.error("ZELLE LOOKUP ERROR:", error);
+
     res.status(500).json({ message: "Server error" });
+
   }
 });
 

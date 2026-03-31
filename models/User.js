@@ -54,7 +54,7 @@ const userSchema = new mongoose.Schema(
     default: "active"
   },
 
-  /* 🔥 NEW BANK PROFILE FIELDS */
+  /* 🔥 PROFILE FIELDS */
   phone: {
     type: String,
     trim: true
@@ -90,65 +90,21 @@ const userSchema = new mongoose.Schema(
 );
 
 
-// ✅ SAFE HOOK
+/* =========================
+   🔐 SAFE HASHING HOOK
+========================= */
 userSchema.pre("save", async function () {
 
-  // 🔐 HASH PASSWORD
+  // HASH PASSWORD ONLY IF CHANGED
   if (this.isModified("password")) {
     this.password = await bcrypt.hash(this.password, 10);
   }
 
-  // 🔐 HASH PIN
+  // HASH PIN ONLY IF CHANGED
   if (this.isModified("transactionPin")) {
     this.transactionPin = await bcrypt.hash(this.transactionPin, 10);
   }
 
-  // ❌ REMOVED RANDOM ACCOUNT GENERATION
-  // 🔥 NOW CONTROLLED IN authRoutes (1011 format)
-
-});
-
-/* =================================
-   UPDATE USER PROFILE
-================================= */
-
-router.put("/update-profile", authMiddleware, async (req, res) => {
-  try {
-
-    const user = await User.findById(req.user);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // 🔥 ONLY ALLOW SAFE FIELDS
-    const {
-      phone,
-      address,
-      city,
-      state,
-      country,
-      zip
-    } = req.body;
-
-    user.phone = phone ?? user.phone;
-    user.address = address ?? user.address;
-    user.city = city ?? user.city;
-    user.state = state ?? user.state;
-    user.country = country ?? user.country;
-    user.zip = zip ?? user.zip;
-
-    await user.save();
-
-    res.json({
-      message: "Profile updated successfully"
-    });
-
-  } catch {
-    res.status(500).json({
-      message: "Failed to update profile"
-    });
-  }
 });
 
 

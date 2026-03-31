@@ -24,21 +24,6 @@ const generateAccountNumber = async () => {
 };
 
 
-/* =========================
-   🔥 FIX OLD USERS
-========================= */
-const fixOldUsers = async () => {
-  const users = await User.find();
-
-  for (let user of users) {
-    if (!user.accountNumber || !user.accountNumber.startsWith("1011")) {
-      user.accountNumber = await generateAccountNumber();
-      await user.save();
-    }
-  }
-};
-
-
 /*
 REGISTER USER
 */
@@ -61,16 +46,22 @@ router.post("/register", async (req, res) => {
 
     } = req.body;
 
-    // 🔥 FIX OLD USERS FIRST
-    await fixOldUsers();
-
+    /* 🔥 BASIC VALIDATION */
     if (!name || !email || !password) {
       return res.status(400).json({
         message: "Name, email and password are required"
       });
     }
 
-    const existingUser = await User.findOne({ email });
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters"
+      });
+    }
+
+    const existingUser = await User.findOne({
+      email: email.toLowerCase()
+    });
 
     /* 🔁 RESTORE DELETED USER */
     if (existingUser) {
@@ -82,7 +73,7 @@ router.post("/register", async (req, res) => {
         existingUser.transactionPin = transactionPin || "0000";
         existingUser.status = "active";
 
-        // 🔥 SAVE NEW PROFILE DATA
+        // 🔥 SAVE PROFILE DATA
         existingUser.phone = phone;
         existingUser.address = address;
         existingUser.city = city;
@@ -90,7 +81,7 @@ router.post("/register", async (req, res) => {
         existingUser.country = country;
         existingUser.zip = zip;
 
-        // 🔥 ENSURE VALID ACCOUNT NUMBER
+        // 🔥 ENSURE ACCOUNT FORMAT
         if (!existingUser.accountNumber?.startsWith("1011")) {
           existingUser.accountNumber = await generateAccountNumber();
         }
@@ -111,12 +102,12 @@ router.post("/register", async (req, res) => {
 
     const user = new User({
       name,
-      email,
+      email: email.toLowerCase(),
       password,
       accountNumber,
       transactionPin: transactionPin || "0000",
 
-      // 🔥 SAVE FULL PROFILE
+      // 🔥 PROFILE DATA
       phone,
       address,
       city,
@@ -153,8 +144,9 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    /* 🔥 FAST INDEX-FRIENDLY SEARCH */
     const user = await User.findOne({
-      email: { $regex: `^${email}$`, $options: "i" }
+      email: email.toLowerCase()
     });
 
     if (!user) {
@@ -198,7 +190,7 @@ router.post("/login", async (req, res) => {
         role: user.role,
         status: user.status,
 
-        // 🔥 INCLUDE PROFILE DATA
+        // 🔥 PROFILE DATA
         phone: user.phone,
         address: user.address,
         city: user.city,
