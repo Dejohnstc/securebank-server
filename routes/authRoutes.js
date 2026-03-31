@@ -13,7 +13,7 @@ const generateAccountNumber = async () => {
   let exists = true;
 
   while (exists) {
-    const random = Math.floor(100000 + Math.random() * 900000); // 6 digits
+    const random = Math.floor(100000 + Math.random() * 900000);
     accountNumber = `1011${random}`;
 
     const user = await User.findOne({ accountNumber });
@@ -25,7 +25,7 @@ const generateAccountNumber = async () => {
 
 
 /* =========================
-   🔥 FIX OLD USERS (RUN ON REGISTER)
+   🔥 FIX OLD USERS
 ========================= */
 const fixOldUsers = async () => {
   const users = await User.find();
@@ -44,7 +44,22 @@ REGISTER USER
 */
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password, transactionPin } = req.body;
+
+    const {
+      name,
+      email,
+      password,
+      transactionPin,
+
+      // 🔥 NEW FIELDS
+      phone,
+      address,
+      city,
+      state,
+      country,
+      zip
+
+    } = req.body;
 
     // 🔥 FIX OLD USERS FIRST
     await fixOldUsers();
@@ -57,15 +72,23 @@ router.post("/register", async (req, res) => {
 
     const existingUser = await User.findOne({ email });
 
-    // 🔁 RESTORE DELETED USER
+    /* 🔁 RESTORE DELETED USER */
     if (existingUser) {
 
       if (existingUser.status === "deleted") {
 
         existingUser.name = name;
-        existingUser.password = password; // model hashes
+        existingUser.password = password;
         existingUser.transactionPin = transactionPin || "0000";
         existingUser.status = "active";
+
+        // 🔥 SAVE NEW PROFILE DATA
+        existingUser.phone = phone;
+        existingUser.address = address;
+        existingUser.city = city;
+        existingUser.state = state;
+        existingUser.country = country;
+        existingUser.zip = zip;
 
         // 🔥 ENSURE VALID ACCOUNT NUMBER
         if (!existingUser.accountNumber?.startsWith("1011")) {
@@ -83,7 +106,7 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // 🔥 CREATE USER WITH 1011 ACCOUNT
+    /* 🔥 CREATE NEW USER */
     const accountNumber = await generateAccountNumber();
 
     const user = new User({
@@ -91,7 +114,15 @@ router.post("/register", async (req, res) => {
       email,
       password,
       accountNumber,
-      transactionPin: transactionPin || "0000"
+      transactionPin: transactionPin || "0000",
+
+      // 🔥 SAVE FULL PROFILE
+      phone,
+      address,
+      city,
+      state,
+      country,
+      zip
     });
 
     await user.save();
@@ -113,6 +144,7 @@ LOGIN USER
 */
 router.post("/login", async (req, res) => {
   try {
+
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -121,7 +153,6 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // 🔥 CASE-INSENSITIVE LOGIN (PRO UPGRADE)
     const user = await User.findOne({
       email: { $regex: `^${email}$`, $options: "i" }
     });
@@ -165,7 +196,15 @@ router.post("/login", async (req, res) => {
         routingNumber: user.routingNumber,
         balance: user.balance,
         role: user.role,
-        status: user.status
+        status: user.status,
+
+        // 🔥 INCLUDE PROFILE DATA
+        phone: user.phone,
+        address: user.address,
+        city: user.city,
+        state: user.state,
+        country: user.country,
+        zip: user.zip
       }
     });
 
