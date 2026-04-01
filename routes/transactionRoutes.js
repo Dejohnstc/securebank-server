@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 
 const User = require("../models/User");
 const Transaction = require("../models/Transaction");
+const Settings = require("../models/Settings"); // 🔥 NEW
 const authMiddleware = require("../middleware/authMiddleware");
 
 
@@ -40,10 +41,18 @@ throw new Error("Invalid transfer amount");
 }
 
 
-/* 🚫 RULE 1: MAX $5000 */
+/* 🔥 FETCH ADMIN LIMITS */
 
-if (numericAmount > 5000) {
-throw new Error("Maximum transfer amount is $5000");
+const settings = await Settings.findOne();
+
+const SINGLE_LIMIT = settings?.singleTransferLimit || 5000;
+const DAILY_LIMIT = settings?.dailyLimit || 10000;
+
+
+/* 🚫 SINGLE LIMIT CHECK */
+
+if (numericAmount > SINGLE_LIMIT) {
+throw new Error(`Maximum transfer amount is $${SINGLE_LIMIT}`);
 }
 
 
@@ -59,7 +68,7 @@ throw new Error("Insufficient funds");
 let receiver;
 
 if (receiverEmail) {
-receiver = await User.findOne({ email: receiverEmail }).session(session);
+receiver = await User.findOne({ email: receiverEmail.toLowerCase() }).session(session);
 }
 
 if (accountNumber) {
@@ -80,23 +89,26 @@ throw new Error("Cannot transfer to yourself");
 
 /* 🚫 DAILY LIMIT */
 
-const DAILY_LIMIT = 10000;
-
 const todayStart = new Date();
 todayStart.setHours(0,0,0,0);
 
 const todayTransfers = await Transaction.find({
 sender: sender._id,
-createdAt: { $gte: todayStart }
+createdAt: { $gte: todayStart },
+status: "completed"
 }).session(session);
 
 const todayTotal = todayTransfers.reduce(
-(sum,tx)=> sum + tx.amount,
+(sum,tx)=> sum + Number(tx.amount || 0),
 0
 );
 
 if(todayTotal + numericAmount > DAILY_LIMIT){
-throw new Error(`Daily transfer limit of $${DAILY_LIMIT.toLocaleString()} exceeded`);
+const remaining = Math.max(0, DAILY_LIMIT - todayTotal);
+
+throw new Error(
+`Daily limit exceeded. Remaining: $${remaining}`
+);
 }
 
 
@@ -145,7 +157,7 @@ session.endSession();
 console.error("TRANSFER ERROR:", error);
 
 
-/* 🔥 SAVE FAILED TRANSACTION (OUTSIDE SESSION) */
+/* 🔥 SAVE FAILED TRANSACTION */
 
 try {
 
